@@ -1,6 +1,10 @@
 import pygame
 import math
  
+angle = 0  # Starting angle in radians
+orbit_radius = 150  # Distance from center
+
+ 
 # Initialize pygame 
 pygame.init()
  
@@ -8,6 +12,7 @@ WIDTH = 2000
 HEIGHT = 1000
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
+BLUE = (176,224,230)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) #Width, height in tuple
  
@@ -37,8 +42,20 @@ while running:
     
     pygame.draw.circle(screen, YELLOW, (center_x, center_y), sun_radius)
 
+    earth_x = center_x + orbit_radius * math.cos(angle)
+    earth_y = center_y + orbit_radius * math.sin(angle)
+    
+    pygame.draw.circle(screen, BLUE, (int((earth_x)),int((earth_y))), earth_radius)
+    
+    # Make it move - increase the angle slightly each frame
+    angle += .02  
 
 
+
+
+
+    clock = pygame.time.Clock()
+    clock.tick(60)  # Limits to 60 frames per second
 
 
     pygame.display.update()
