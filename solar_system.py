@@ -3,16 +3,20 @@ import math
  
 angle = 0  # Starting angle in radians
 orbit_radius = 150  # Distance from center
-
+mars_orbit_radius = 250
+mars_angle = 0
  
 # Initialize pygame 
 pygame.init()
- 
+
+clock = pygame.time.Clock()
+
 WIDTH = 2000
 HEIGHT = 1000
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
 BLUE = (176,224,230)
+RED = (255, 0, 0)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) #Width, height in tuple
  
@@ -47,18 +51,24 @@ while running:
     
     pygame.draw.circle(screen, BLUE, (int((earth_x)),int((earth_y))), earth_radius)
     
+    mars_x = center_x + mars_orbit_radius * math.cos(mars_angle)
+    mars_y = center_y + mars_orbit_radius * math.sin(mars_angle)
+    
+    pygame.draw.circle(screen, RED, (int((mars_x)), int((mars_y))), mars_radius)
+    
     # Make it move - increase the angle slightly each frame
     angle += .02  
+    mars_angle += .02/1.88 # mars year is 1.88 earth year
 
 
 
 
 
-    clock = pygame.time.Clock()
-    clock.tick(60)  # Limits to 60 frames per second
+    
+
 
 
     pygame.display.update()
- 
+    clock.tick(60)  # Limits to 60 frames per second
 
 pygame.quit()
