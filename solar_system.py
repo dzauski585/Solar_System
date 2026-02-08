@@ -1,11 +1,6 @@
 import pygame
 import math
  
-angle = 0  # Starting angle in radians
-earth_orbit_radius = 150  # Distance from center
-mars_orbit_radius = 250
-mars_angle = 0
- 
 # Initialize pygame 
 pygame.init()
 
@@ -17,34 +12,90 @@ BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
 BLUE = (176,224,230)
 RED = (255, 0, 0)
+BROWN = (150, 75, 0)
+GREEN = (119, 116, 81)
+ORANGE = (255, 165, 0)
+TAN = (210, 180, 140)
+LIGHT_BLUE = (173, 216, 230)
+DARK_BLUE = (0, 0, 139)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) #Width, height in tuple
  
 pygame.display.set_caption("The Solar System")
+
+class Planet:
+    def __init__(self, color, orbit_radius, planet_radius, speed, name):
+
+        self.color = color
+        self.orbit_radius = orbit_radius
+        self.radius = planet_radius
+        self.speed = speed  
+        self.angle = 0
+        self.name = name  
+    
+    def info(self):
+        print(f"{self.name}: orbit = {self.orbit_radius}, speed = {self.speed}")
+      '''  
+    def attraction(self, other):
+    # What are we calculating here?
+    other_x, other_y = other.x, other.y
+    distance_x = other_x - self.x
+    distance_y = other_y - self.y
+    
+    # What is this calculating? What's the formula?
+    distance = math.sqrt(distance_x ** 2 + distance_y ** 2)
+    
+    # What special case is this handling?
+    if other.sun:
+        self.distance_to_sun = distance
+    
+    # What physics formula is this?
+    force = self.G * self.mass * other.mass / distance ** 2
+    
+    # What are theta, force_x, and force_y?
+    theta = math.atan2(distance_y, distance_x)
+    force_x = math.cos(theta) * force
+    force_y = math.sin(theta) * force
+    
+    return force_x, force_y
+
+    '''
+    def update(self):
+
+        self.angle += self.speed
+    
+    def draw(self, surface, center_x, center_y):
+
+        x = center_x + self.orbit_radius * math.cos(self.angle)
+        y = center_y + self.orbit_radius * math.sin(self.angle)
+        
+        pygame.draw.circle(surface, self.color, (int(x), int(y)), self.radius)
+        
+    def draw_orbit(self, surface, center_x, center_y):
+        pygame.draw.circle(surface, self.color, (center_x, center_y), self.orbit_radius, 1)  # 1 = line width (not filled)
+    
 
 
 def sun(surface, color, center_x, center_y, radius):
     x = center_x
     y = center_y
     
+    
     pygame.draw.circle(surface, color, (x, y), radius)
 
-def planet(surface, color, center_x, center_y, orbit_radius, angle, radius):
-    x = center_x + orbit_radius * math.cos(angle)
-    y = center_y + orbit_radius * math.sin(angle)
-    
-    pygame.draw.circle(surface, color, (int((x)),int((y))), radius)
-    return x, y
+mercury = Planet(BROWN, 60, 4, .02 / .24, "Mercury")
+venus = Planet(GREEN, 100, 6, .02 / .62, "Venus")
+earth = Planet(BLUE, 150, 6, .02, "Earth")
+mars = Planet(RED, 250, 5, .02/1.88, "Mars")
+jupiter = Planet(ORANGE, 350, 15, .02 / 11.86, "Jupiter")
+saturn = Planet(TAN, 420, 12, .02 / 29.46, "Saturn")
+uranus = Planet(LIGHT_BLUE, 470, 8, .02 / 84.01, "Uranus")
+neptune = Planet(DARK_BLUE, 490, 8, .02 / 164.8, "Neptune")
 
-def orbit_path(surface, color, center_x, center_y, orbit_radius ):
-    pygame.draw.circle(surface, color, (center_x, center_y), orbit_radius, 1)  # 1 = line width (not filled)
-
-mars_trail = []
-MAX_TRAIL = 590
-def past_orbit_path():
-    pass
+planets = [mercury, venus, earth, mars, jupiter, saturn, uranus, neptune]
     
 running = True
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -56,42 +107,14 @@ while running:
     center_x = WIDTH // 2  # What operation finds the middle?
     center_y = HEIGHT // 2
     
-    sun_radius = 30
-    mercury_radius = 4
-    venus_radius = 6
-    earth_radius = 6
-    mars_radius = 5
-    jupiter_radius = 15
-    saturn_radius = 12
-    uranus_radius = 8
-    neptune_radius = 8
+    sun(screen, YELLOW, center_x, center_y, 30)
     
-    #pygame.draw.circle(screen, YELLOW, (center_x, center_y), sun_radius)
-    sun(screen, YELLOW, center_x, center_y, sun_radius)
-
-    #earth_x = center_x + orbit_radius * math.cos(angle)
-    #earth_y = center_y + orbit_radius * math.sin(angle)
+    for planet in planets:
+        planet.draw_orbit(screen, center_x, center_y)
+        planet.update()
+        planet.draw(screen, center_x, center_y)
     
-   #pygame.draw.circle(screen, BLUE, (int((earth_x)),int((earth_y))), earth_radius)
-    earth_x, earth_y = planet(screen, BLUE, center_x, center_y, earth_orbit_radius, angle, earth_radius)
-    orbit_path(screen, BLUE, center_x, center_y, earth_orbit_radius)
-    mars_x, mars_y = planet(screen, RED, center_x, center_y, mars_orbit_radius, mars_angle, mars_radius)
-    mars_trail.append((int (mars_x), int (mars_y)))
-    if len (mars_trail) > MAX_TRAIL:
-        mars_trail.pop(0)
-    if len(mars_trail) > 1:
-        pygame.draw.lines(screen, RED, False, mars_trail, 1)
-    #mars_x = center_x + mars_orbit_radius * math.cos(mars_angle)
-    #mars_y = center_y + mars_orbit_radius * math.sin(mars_angle)
     
-    #pygame.draw.circle(screen, RED, (int((mars_x)), int((mars_y))), mars_radius)
-    
-    # Make it move - increase the angle slightly each frame
-    angle += .02  
-    mars_angle += .02/1.88 # mars year is 1.88 earth year
-
-
-
 
     pygame.display.update()
     clock.tick(60)  # Limits to 60 frames per second
