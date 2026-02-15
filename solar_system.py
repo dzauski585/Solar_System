@@ -221,7 +221,7 @@ dysnomia = create_moon(eris, 37273, 0.13, 8.2e19, 2, (170, 170, 180), "Dysnomia"
 # Haumea's Moons
 hiiaka = create_moon(haumea, 49880, 0.11, 1.79e19, 2, (190, 180, 170), "Hi'iaka")
 namaka = create_moon(haumea, 25657, 0.11, 1.79e18, 2, (190, 180, 170), "Namaka")
-moon = create_moon(earth, 384400, 1.022, 7.342e22, 4, (169, 169, 169), "Moon")
+
 
 
 planets = [
@@ -322,7 +322,19 @@ while running:
     # Draw once per frame
     for planet in planets:
         planet.draw(screen, camera)
+    font = pygame.font.SysFont("Arial", 16)
 
+# After drawing planets, before pygame.display.update():
+    target_name = camera.follow_target.name if camera.follow_target else "Sun"
+    hud_lines = [
+        f"Following: {target_name}",
+        f"Speed: {time_scale}x",
+        f"Zoom: {camera.zoom:.1f}",
+        "0: Sun  1-8: Planets  +/-: Speed  Space: Pause",
+    ]
+    for i, line in enumerate(hud_lines):
+        text = font.render(line, True, (200, 200, 200))
+        screen.blit(text, (10, 10 + i * 22))
     pygame.display.update()
     clock.tick(60)
 
