@@ -115,19 +115,32 @@ class Camera:
         self.zoom = 1.0
         self.offset_x = 0
         self.offset_y = 0
+        self.follow_target = None
     
     def world_to_screen(self, x, y, base_scale):
-        
         screen_x = x * base_scale * self.zoom + WIDTH/2 + self.offset_x
         screen_y = y * base_scale * self.zoom + HEIGHT/2 + self.offset_y
         return int(screen_x), int(screen_y)
     
+    def update(self):
+        """Call once per frame to follow target."""
+        if self.follow_target:
+            self.offset_x = -self.follow_target.x * Planet.SCALE * self.zoom
+            self.offset_y = -self.follow_target.y * Planet.SCALE * self.zoom
+    
     def handle_input(self, event):
         if event.type == pygame.MOUSEWHEEL:
-            if event.y > 0:  # Scroll up
+            if event.y > 0:
                 self.zoom *= 1.2
-            else:  # Scroll down
+            else:
                 self.zoom /= 1.2
+        
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_0 or event.key == pygame.K_HOME:
+                self.follow_target = None
+                self.offset_x = 0
+                self.offset_y = 0
+                self.zoom = 1.0
  
 def create_moon(parent, distance_km, orbital_vel_km_s, mass, radius, color, name):
     distance_m = distance_km * 1000
@@ -231,11 +244,24 @@ camera = Camera()
 
 sub_dt = Planet.TIMESTEP / 96
 
+planet_lookup = {p.name.lower(): p for p in planets}
+
 while running:
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         camera.handle_input(event)
+        
+        if event.type == pygame.KEYDOWN:
+            key_map = {
+                pygame.K_1: 'mercury', pygame.K_2: 'venus',
+                pygame.K_3: 'earth',   pygame.K_4: 'mars',
+                pygame.K_5: 'jupiter', pygame.K_6: 'saturn',
+                pygame.K_7: 'uranus',  pygame.K_8: 'neptune',
+            }
+            if event.key in key_map:
+                camera.follow_target = planet_lookup[key_map[event.key]]
 
     screen.fill(BLACK)
 
@@ -278,7 +304,8 @@ while running:
             planet.y_vel += fy / planet.mass * sub_dt
             planet.x += planet.x_vel * sub_dt
             planet.y += planet.y_vel * sub_dt
-
+            
+    camera.update()
     # Draw once per frame
     for planet in planets:
         planet.draw(screen, camera)
