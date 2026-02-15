@@ -99,13 +99,14 @@ class Planet:
 
     def draw(self, surface, camera):
         screen_x, screen_y = camera.world_to_screen(self.x, self.y, self.SCALE)
+        
         if self.sun:
-            display_radius = max(5, int(self.radius * camera.zoom))
+            display_radius = max(3, int(self.radius * min(camera.zoom, 5)))
         else:
-            display_radius = max(3, int(self.radius * camera.zoom))
+            display_radius = max(2, int(self.radius * min(camera.zoom, 3)))
         
         pygame.draw.circle(surface, self.color, (int(screen_x), int(screen_y)), display_radius)
-        
+            
     def draw_orbit(self, surface, center_x, center_y):
         pass
     
@@ -242,7 +243,8 @@ running = True
 
 camera = Camera()
 
-sub_dt = Planet.TIMESTEP / 96
+
+time_scale = 1.0
 
 planet_lookup = {p.name.lower(): p for p in planets}
 
@@ -262,9 +264,20 @@ while running:
             }
             if event.key in key_map:
                 camera.follow_target = planet_lookup[key_map[event.key]]
-
+            if event.key == pygame.K_EQUALS:  # + key
+                time_scale *= 2
+                print(f"Speed: {time_scale}x")
+            elif event.key == pygame.K_MINUS:  # - key
+                time_scale /= 2
+                print(f"Speed: {time_scale}x")
+            elif event.key == pygame.K_SPACE:
+                time_scale = 0 if time_scale > 0 else 1.0
+                print("PAUSED" if time_scale == 0 else "RUNNING")
+                
     screen.fill(BLACK)
-
+    
+    sub_dt = Planet.TIMESTEP * time_scale / 96
+    
     for _ in range(96):
         # Calculate planet forces (ignore moons)
         planet_forces = {}
