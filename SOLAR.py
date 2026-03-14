@@ -1,5 +1,6 @@
 import pygame
 import math
+import re
 
 pygame.init()
 
@@ -101,6 +102,8 @@ class Camera:
                 self.zoom *= 1.15
             else:
                 self.zoom /= 1.15
+                
+# Helper Functions
 
 def select_planet(planet):
         global selected_planet
@@ -109,6 +112,47 @@ def select_planet(planet):
         selected_planet = planet
         planet.selected = True
         
+def format_period(days):
+    if days == 0:
+        return 'N/A'
+    if days < 1:
+        return f'{days * 24:.1f} hours ({days:.2f} days)'
+    if days < 365:
+        return f'{days:.1f} days ({days * 24:,.0f} hours)'
+    return f'{days/365.25:.2f} years ({days:,.0f} days)'
+
+def format_mass(kg):
+    earths = kg / 5.972e24
+    if earths > 10:
+        return f'{earths:,.1f} Earths ({kg:.3e} kg)'
+    if earths > 0.01:
+        return f'{earths:.3f} Earths ({kg:.3e} kg)'
+    return f'{kg:.3e} kg ({earths:.6f} Earths)' 
+
+def format_gravity(g):
+    earth_g = g / 9.81
+    return f'{g} m/s² ({earth_g:.2f}x Earth)'
+
+def format_radius(km):
+    miles = km * 0.621371
+    return f'{km:,} km ({miles:,.0f} miles)'
+
+def format_temp(temp_str):
+    numbers = re.findall(r'-?\d+', temp_str)
+    if len(numbers) == 2:
+        f1 = int(numbers[0]) * 9/5 + 32
+        f2 = int(numbers[1]) * 9/5 + 32
+        return f'{temp_str} ({f1:.0f} to {f2:.0f}°F)'
+    elif len(numbers) == 1:
+        f1 = int(numbers[0]) * 9/5 + 32
+        return f'{temp_str} ({f1:.0f}°F)'
+    return temp_str
+
+def format_au(au):
+    if au == 0:
+        return 'N/A (center)'
+    miles = au * 92955807.3
+    return f'{au:.3f} AU ({miles:,.0f} miles)'       
         
 PLANET_DATA = {
     'Sun': {
@@ -656,12 +700,45 @@ while running:
     
     pygame.draw.line(screen, (60,60,60), (PANEL_SPLIT,0), (PANEL_SPLIT, HEIGHT), 1)
     
+
     if selected_planet:
         info = PLANET_DATA[selected_planet.name]
+        hud_x = PANEL_SPLIT + 30
+        y = 30
+        
+        # Title
         title = font_hud_title.render(selected_planet.name, True, selected_planet.color)
-        screen.blit(title, (PANEL_SPLIT + 30, 30))
+        screen.blit(title, (hud_x, y))
+        y += 30
+        
+        # Type
         type_text = font_name.render(info['type'], True, (150, 150, 150))
-        screen.blit(type_text, (PANEL_SPLIT + 30, 60))
+        screen.blit(type_text, (hud_x, y))
+        y += 30
+        
+        # Separator line
+        pygame.draw.line(screen, (60, 60, 60), (hud_x, y), (WIDTH - 30, y), 1)
+        y += 15
+        
+        # Info rows
+        rows = [
+            ('Distance', format_au(info['dist_au'])),
+            ('Orbital Period', format_period(info['period_days'])),
+            ('Mass', format_mass(info['mass_kg'])),
+            ('Velocity', f"{info['velocity_km_s']} km/s"),
+            ('Eccentricity', f"{info['eccentricity']}"),
+            ('Radius', format_radius(info['radius_km'])),
+            ('Surface Gravity', format_gravity(info['surface_gravity_m_s2'])),
+            ('Temperature', format_temp(info['temperature'])),
+            ('Moons', str(len(info['moons']))),
+        ]
+        
+        for label, value in rows:
+            label_text = font_name.render(f"{label}:", True, (120, 120, 120))
+            value_text = font_name.render(value, True, (200, 200, 200))
+            screen.blit(label_text, (hud_x, y))
+            screen.blit(value_text, (hud_x + 150, y))
+            y += 20
     
     pygame.display.update()
 
