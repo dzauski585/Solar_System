@@ -1,6 +1,7 @@
 import pygame
 import math
 import re
+import random
 
 pygame.init()
 
@@ -103,6 +104,25 @@ class Camera:
                 self.zoom *= 1.15
             else:
                 self.zoom /= 1.15
+                
+class Moon:
+    def __init__(self, name, dist_km, period_days, radius_km, color):
+        self.name = name
+        self.dist_km = dist_km
+        self.period_days = period_days
+        self.radius_km = radius_km
+        self.color = color
+        
+        self.angle = random.uniform(0, 2 * math.pi)
+        self.speed = (2 * math.pi) / period_days
+        
+    def update(self, dt_days):
+        self.angle += self.speed * dt_days
+        self.angle = self.angle % (2 * math.pi)
+    
+    def draw(sruface, center_x, center_y, orbit_scale):
+        
+        
                 
 # Helper Functions
 
