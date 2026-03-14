@@ -7,6 +7,8 @@ clock = pygame.time.Clock()
 
 WIDTH = 2000
 HEIGHT = 1000
+PANEL_SPLIT = 1200
+
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
 BLUE = (176,224,230)
@@ -39,24 +41,48 @@ class Planet:
         self.y_vel = y_vel
         self.sun = False
     
-    def draw(self, surface):
-        screen_x = self.x * self.SCALE + WIDTH / 2
-        screen_y = self.y * self.SCALE + HEIGHT / 2
-        pygame.draw.circle(surface, self.color, (int(screen_x), int(screen_y)), self.radius)
+    def draw(self, surface, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
         
-    def attraction():
-        '''
-        METHOD attraction(other):
-            dx = other.x - self.x
-            dy = other.y - self.y
-            distance = sqrt(dx^2 + dy^2)
-            force = G * self.mass * other.mass / distance^2
-            angle = atan2(dy, dx)
-            RETURN (cos(angle) * force, sin(angle) * force)
-
-        '''
+        if self.sun:
+            dot_radius = 8
+        else:
+            dot_radius = 6
+            
+        pygame.draw.circle(surface, self.color, (int(screen_x), int(screen_y)), dot_radius)
         
-
+        label = font_name.render(self.name, True, (200,200,200))
+        surface.blit(label, (screen_x + dot_radius + 4, screen_y -6))
+        
+    def attraction(self, other):
+        dx = other.x - self.x
+        dy = other.y - self.y
+        distance = math.sqrt(dx**2 + dy**2)
+        force = self.G * self.mass * other.mass / distance**2
+        angle = math.atan2(dy, dx)
+        return (math.cos(angle) * force, math.sin(angle) * force)
+     
+class Camera:
+    def __init__(self):
+        self.zoom = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+        self.base_scale = (PANEL_SPLIT / 2) / (32 * Planet.AU)
+    
+    def world_to_screen(self, x_meters, y_meters):
+        px = x_meters * self.base_scale * self.zoom + PANEL_SPLIT/2 + self.offset_x
+        py = y_meters * self.base_scale * self.zoom + HEIGHT/2 + self.offset_y
+        return (int(px), int(py))
+    
+    def handle_input(self, event):
+        if event.type == pygame.MOUSEWHEEL:
+            if event.y > 0:
+                self.zoom *= 1.15
+            else:
+                self.zoom /= 1.15
+    
+    
+    
 sun_body = Planet("Sun", YELLOW, 1.989e30, 0, 0, 30)
 sun_body.sun = True
 
@@ -83,18 +109,57 @@ planets = [
 
 running = True
 
+camera = Camera()
+
+font_name = pygame.font.SysFont("Arial", 13)
+
 while running:
 
     for event in pygame.event.get():
+        camera.handle_input(event)
+        
         if event.type == pygame.QUIT:
             running = False
 
     screen.fill(BLACK)
-
+    
+    screen.set_clip((0,0, PANEL_SPLIT, HEIGHT))
+    
+    forces = {}
+    
     for planet in planets:
-        planet.draw(screen)
+        if planet == sun_body:
+            continue
+        
+        total_fx = 0
+        total_fy = 0
+        
+        for other_planet in planets:
+            if planet == other_planet:
+                continue
+            (fx, fy) = planet.attraction(other_planet)
+            total_fx += fx
+            total_fy += fy
+        
+        forces[planet.name] = (total_fx, total_fy)
+    
+    for planet in planets:
+        if planet == sun_body:
+            continue
+        
+        (fx, fy) = forces[planet.name]
+        
+        planet.x_vel += (fx / planet.mass) * planet.TIMESTEP
+        planet.y_vel += (fy / planet.mass) * planet.TIMESTEP 
+        
+        planet.x += planet.x_vel * planet.TIMESTEP
+        planet.y += planet.y_vel * planet.TIMESTEP
+    
+    for planet in planets:
+        planet.draw(screen, camera)
 
-
+    screen.set_clip(None)
+    pygame.draw.line(screen, (60,60,60), (PANEL_SPLIT,0), (PANEL_SPLIT, HEIGHT), 1)
     pygame.display.update()
 
     clock.tick(60)
