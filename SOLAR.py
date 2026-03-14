@@ -541,6 +541,8 @@ camera = Camera()
 
 font_name = pygame.font.SysFont("Arial", 13)
 
+
+
 while running:
 
     for event in pygame.event.get():
@@ -550,8 +552,21 @@ while running:
             running = False
 
     screen.fill(BLACK)
-    
     screen.set_clip((0,0, PANEL_SPLIT, HEIGHT))
+    
+    for planet in planets:
+        if planet == sun_body:
+            continue
+        
+        if PLANET_DATA[planet.name]['eccentricity'] > 0.1:
+            continue
+        
+        orbit_radius = PLANET_DATA[planet.name]['dist_au'] * Planet.AU * camera.base_scale * camera.zoom
+        
+        if orbit_radius > 2:
+            sun_sx, sun_sy = camera.world_to_screen(0, 0)
+            pygame.draw.circle(screen, (30, 30, 30), (sun_sx, sun_sy), int(orbit_radius), 1)
+        
     
     forces = {}
     
