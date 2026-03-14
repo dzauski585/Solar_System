@@ -9,6 +9,7 @@ clock = pygame.time.Clock()
 WIDTH = 2000
 HEIGHT = 1000
 PANEL_SPLIT = 1200
+DETAIL_WIDTH = WIDTH - PANEL_SPLIT
 
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
@@ -739,6 +740,30 @@ while running:
             screen.blit(label_text, (hud_x, y))
             screen.blit(value_text, (hud_x + 150, y))
             y += 20
+        
+        # Separator
+        y += 10
+        pygame.draw.line(screen, (60, 60, 60), (hud_x, y), (WIDTH - 30, y), 1)
+        y += 15
+        
+        # Description (word-wrapped)
+        description = info['description']
+        words = description.split(' ')
+        line = ''
+        for word in words:
+            test_line = line + word + ' '
+            test_surface = font_name.render(test_line, True, (180, 180, 180))
+            if test_surface.get_width() > DETAIL_WIDTH - 60:
+                text = font_name.render(line, True, (180, 180, 180))
+                screen.blit(text, (hud_x, y))
+                y += 18
+                line = word + ' '
+            else:
+                line = test_line
+        if line:
+            text = font_name.render(line, True, (180, 180, 180))
+            screen.blit(text, (hud_x, y))
+            y += 18
     
     pygame.display.update()
 
