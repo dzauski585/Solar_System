@@ -40,6 +40,8 @@ class Planet:
         self.x_vel = 0
         self.y_vel = y_vel
         self.sun = False
+        self.hovered =False
+        self.selected = False
     
     def draw(self, surface, camera):
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
@@ -48,8 +50,18 @@ class Planet:
             dot_radius = 8
         else:
             dot_radius = 6
+        
+        if self.hovered:
+            draw_color = (min(self.color[0]+60, 255),
+                          min(self.color[1]+60, 255),
+                          min(self.color[2]+60, 255))
+        else: 
+            draw_color = self.color
             
-        pygame.draw.circle(surface, self.color, (int(screen_x), int(screen_y)), dot_radius)
+        if self.selected:
+            pygame.draw.circle(surface, (255, 255, 255), (int(screen_x), int(screen_y)), dot_radius + 4, 1)
+            
+        pygame.draw.circle(surface, draw_color, (int(screen_x), int(screen_y)), dot_radius)
         
         label = font_name.render(self.name, True, (200,200,200))
         surface.blit(label, (screen_x + dot_radius + 4, screen_y -6))
@@ -61,6 +73,15 @@ class Planet:
         force = self.G * self.mass * other.mass / distance**2
         angle = math.atan2(dy, dx)
         return (math.cos(angle) * force, math.sin(angle) * force)
+    
+    def hit_test(self, mouse_x, mouse_y, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        dist = math.sqrt((mouse_x - screen_x)**2 + (mouse_y - screen_y)**2)
+        if dist < 10:
+            return True
+        else:
+            return False
+        
      
 class Camera:
     def __init__(self):
@@ -81,6 +102,14 @@ class Camera:
             else:
                 self.zoom /= 1.15
 
+def select_planet(planet):
+        global selected_planet
+        if selected_planet:
+            selected_planet.selected = False
+        selected_planet = planet
+        planet.selected = True
+        
+        
 PLANET_DATA = {
     'Sun': {
         'dist_au': 0,
@@ -540,7 +569,9 @@ running = True
 camera = Camera()
 
 font_name = pygame.font.SysFont("Arial", 13)
+font_hud_title = pygame.font.SysFont("Arial", 22, bold=True)
 
+selected_planet = None
 
 
 while running:
@@ -550,6 +581,26 @@ while running:
         
         if event.type == pygame.QUIT:
             running = False
+        
+        if event.type == pygame.MOUSEMOTION:
+            mouse_x, mouse_y = event.pos
+            for planet in planets:
+                planet.hovered = planet.hit_test(mouse_x, mouse_y, camera)   
+                    
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = event.pos
+            if mouse_x < PANEL_SPLIT:
+                for planet in planets:
+                    if planet.hit_test(mouse_x, mouse_y, camera):
+                        select_planet(planet)
+                        break
+                    
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_0:
+                if selected_planet:
+                    selected_planet.selected = False
+                selected_planet = None
+                system_paused = False     
 
     screen.fill(BLACK)
     screen.set_clip((0,0, PANEL_SPLIT, HEIGHT))
@@ -604,6 +655,13 @@ while running:
     screen.set_clip(None)
     
     pygame.draw.line(screen, (60,60,60), (PANEL_SPLIT,0), (PANEL_SPLIT, HEIGHT), 1)
+    
+    if selected_planet:
+        info = PLANET_DATA[selected_planet.name]
+        title = font_hud_title.render(selected_planet.name, True, selected_planet.color)
+        screen.blit(title, (PANEL_SPLIT + 30, 30))
+        type_text = font_name.render(info['type'], True, (150, 150, 150))
+        screen.blit(type_text, (PANEL_SPLIT + 30, 60))
     
     pygame.display.update()
 
