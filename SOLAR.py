@@ -228,6 +228,7 @@ class Probe:
         self.trail_xy = []
         self.trail_xz = []
         self.trail_max = 500
+        
     
     def update(self, dt):
         dist = math.sqrt(self.x**2 + self.y**2 + self.z**2)
@@ -998,7 +999,7 @@ while running:
     
     forces = {}
     
-    for planet in planets:
+    for planet in planets:        
         if planet == sun_body:
             continue
         
