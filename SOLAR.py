@@ -2,6 +2,8 @@ import pygame
 import math
 import re
 import random
+from JPL_location import fetch_all_positions, create_planet
+
 
 pygame.init()
 
@@ -22,6 +24,7 @@ ORANGE = (255, 165, 0)
 TAN = (210, 180, 140)
 LIGHT_BLUE = (173, 216, 230)
 DARK_BLUE = (0, 0, 139)
+
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) #Width, height in tuple
  
@@ -47,6 +50,7 @@ class Planet:
         self.selected = False
     
     def draw(self, surface, camera):
+
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
         
         if self.sun:
@@ -70,12 +74,15 @@ class Planet:
         surface.blit(label, (screen_x + dot_radius + 4, screen_y -6))
         
     def attraction(self, other):
-        dx = other.x - self.x
-        dy = other.y - self.y
-        distance = math.sqrt(dx**2 + dy**2)
+        distance_x = other.x - self.x
+        distance_y = other.y - self.y
+        distance = math.sqrt(distance_x**2 + distance_y**2)
+
+        distance = max(distance, 1e9)  # minimum ~1 million km, prevents force explosion
+
         force = self.G * self.mass * other.mass / distance**2
-        angle = math.atan2(dy, dx)
-        return (math.cos(angle) * force, math.sin(angle) * force)
+        theta = math.atan2(distance_y, distance_x)
+        return math.cos(theta) * force, math.sin(theta) * force
     
     def hit_test(self, mouse_x, mouse_y, camera):
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
@@ -96,6 +103,8 @@ class Camera:
     def world_to_screen(self, x_meters, y_meters):
         px = x_meters * self.base_scale * self.zoom + PANEL_SPLIT/2 + self.offset_x
         py = y_meters * self.base_scale * self.zoom + HEIGHT/2 + self.offset_y
+        px = max(-100000, min(100000, px))
+        py = max(-100000, min(100000, py))
         return (int(px), int(py))
     
     def handle_input(self, event):
@@ -120,12 +129,157 @@ class Moon:
         self.angle += self.speed * dt_days
         self.angle = self.angle % (2 * math.pi)
     
-    def draw(sruface, center_x, center_y, orbit_scale):
-        
-        
-                
-# Helper Functions
+    def draw(self, surface, center_x, center_y, orbit_scale):
+        orbit_radius_px = self.dist_km * orbit_scale
+ 
+        pygame.draw.circle(surface, (40, 40, 40),(int(center_x), int(center_y)), int(orbit_radius_px), 1)
+ 
+        moon_x = center_x + orbit_radius_px * math.cos(self.angle)
+        moon_y = center_y + orbit_radius_px * math.sin(self.angle)
 
+        dot_size = max(3, int(self.radius_km / 500))
+        pygame.draw.circle(surface, self.color, (int(moon_x), int(moon_y)), dot_size)
+
+        label = moon_font.render(self.name, True, (160, 160, 160))
+        surface.blit(label, (int(moon_x) + dot_size + 3, int(moon_y) - 5))
+
+class Belt:
+    def __init__(self, inner_au, outer_au, num_particles, color, name):
+        self.color = color
+        self.particles = []
+        self.name = name
+        self.mid_au = (inner_au + outer_au / 2)
+        
+        for i in range(num_particles):
+            distance = random.uniform(inner_au, outer_au) * Planet.AU
+            angle = random.uniform(0, 2 * math.pi)
+            x = distance * math.cos(angle)
+            y = distance * math.sin(angle)
+            v = math.sqrt(Planet.G * 1.989e30 / distance)
+            vx = -v * math.sin(angle)
+            vy =  v * math.cos(angle)
+            self.particles.append([x, y, vx, vy])
+            
+    def update(self, dt):
+        for p in self.particles:
+            dist = math.sqrt(p[0]**2 + p[1]**2)
+            a = Planet.G * 1.989e30 / dist**2
+            ax = -a * p[0] / dist
+            ay = -a * p[1] / dist
+            p[2] += ax * dt
+            p[3] += ay * dt
+            p[0] += p[2] * dt
+            p[1] += p[3] * dt
+            
+    def draw(self, surface, camera):
+        for p in self.particles:
+            sx, sy = camera.world_to_screen(p[0], p[1])
+            if 0 <= sx <= PANEL_SPLIT and 0 <= sy <= HEIGHT:
+                surface.set_at((sx, sy), self.color)
+                
+        label_x = self.mid_au * Planet.AU
+        lsx, lsy = camera.world_to_screen(label_x, 0)
+        if 0 <= lsx <= PANEL_SPLIT:
+            label = font_name.render(self.name, True, self.color)
+            surface.blit(label, (lsx + 5, lsy - 6))
+
+class Boundary:
+    def __init__(self, radius_au, color, name, dashed=False):
+        self.radius_m = radius_au * Planet.AU
+        self.color = color
+        self.name = name
+        self.dashed = dashed
+    
+    def draw(self, surface, camera):
+        points = []
+        for i in range(360):
+            angle = 2 * math.pi * i / 360
+            x = self.radius_m * math.cos(angle)
+            y = self.radius_m * math.sin(angle)
+            sx, sy = camera.world_to_screen(x, y)
+            points.append((sx, sy))
+        
+        if self.dashed:
+            for i in range(0, len(points) - 1, 4):
+                end = min(i + 2, len(points) - 1)
+                pygame.draw.line(surface, self.color, points[i], points[end], 1)
+        else:
+            visible = [p for p in points if -500 <= p[0] <= PANEL_SPLIT + 500 and -500 <= p[1] <= HEIGHT + 500]
+            if len(visible) > 1:
+                pygame.draw.lines(surface, self.color, False, visible, 1)
+        
+        label_x = self.radius_m
+        label_y = 0
+        lsx, lsy = camera.world_to_screen(label_x, label_y)
+        if 0 <= lsx <= PANEL_SPLIT:
+            label = font_name.render(f'{self.name} ({self.radius_m / Planet.AU:.0f} AU)', True, self.color)
+            surface.blit(label, (lsx + 5, lsy - 6))
+                   
+class Probe:
+    def __init__(self, name, x, y, z, vx, vy, vz, color):
+        self.name = name
+        self.color = color
+        self.x = x
+        self.y = y
+        self.z = z
+        self.vx = vx
+        self.vy = vy
+        self.vz = vz
+        self.trail_xy = []
+        self.trail_xz = []
+        self.trail_max = 500
+    
+    def update(self, dt):
+        dist = math.sqrt(self.x**2 + self.y**2 + self.z**2)
+        a = Planet.G * 1.989e30 / dist**2
+        
+        self.vx += (-a * self.x / dist) * dt
+        self.vy += (-a * self.y / dist) * dt
+        self.vz += (-a * self.z / dist) * dt
+        
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.z += self.vz * dt
+        
+        self.trail_xy.append((self.x, self.y))
+        dist_2d = math.sqrt(self.x**2 + self.y**2)
+        self.trail_xz.append((dist_2d, self.z))
+        
+        if len(self.trail_xy) > self.trail_max:
+            self.trail_xy.pop(0)
+        if len(self.trail_xz) > self.trail_max:
+            self.trail_xz.pop(0)
+    
+    def draw(self, surface, camera):
+        sx, sy = camera.world_to_screen(self.x, self.y)
+        if sx < 0 or sx > PANEL_SPLIT or sy < 0 or sy > HEIGHT:
+            return
+        
+        if len(self.trail_xy) > 1:
+            points = [camera.world_to_screen(tx, ty)
+                      for tx, ty in self.trail_xy[::5]]
+            if len(points) > 1:
+                pygame.draw.lines(surface, self.color, False, points, 1)
+        
+        pygame.draw.circle(surface, self.color, (sx, sy), 4)
+        
+        label = font_name.render(self.name, True, self.color)
+        surface.blit(label, (sx + 6, sy - 6))
+    
+    def get_3d_stats(self):
+        dist_3d = math.sqrt(self.x**2 + self.y**2 + self.z**2)
+        dist_2d = math.sqrt(self.x**2 + self.y**2)
+        speed = math.sqrt(self.vx**2 + self.vy**2 + self.vz**2)
+        ecliptic_angle = math.degrees(math.atan2(self.z, dist_2d))
+        
+        return {
+            'dist_3d_au': dist_3d / Planet.AU,
+            'dist_2d_au': dist_2d / Planet.AU,
+            'height_au': self.z / Planet.AU,
+            'speed_km_s': speed / 1000,
+            'ecliptic_angle_deg': ecliptic_angle,
+        }   
+# Helper Functions
 def select_planet(planet):
         global selected_planet
         if selected_planet:
@@ -174,6 +328,14 @@ def format_au(au):
         return 'N/A (center)'
     miles = au * 92955807.3
     return f'{au:.3f} AU ({miles:,.0f} miles)'       
+
+def select_planet(planet):
+    global selected_planet, detail_zoom
+    if selected_planet:
+        selected_planet.selected = False
+    selected_planet = planet
+    planet.selected = True
+    detail_zoom = 1.0
         
 PLANET_DATA = {
     'Sun': {
@@ -188,6 +350,7 @@ PLANET_DATA = {
         'type': 'G-type Main Sequence Star',
         'description': 'The star at the center of the Solar System. Contains 99.86% of the total mass. Powered by nuclear fusion converting hydrogen to helium.',
         'moons': [],
+        'total_moons': 0
     },
     'Mercury': {
         'dist_au': 0.387,
@@ -201,6 +364,7 @@ PLANET_DATA = {
         'type': 'Terrestrial Planet',
         'description': 'Smallest planet. Extreme temperature swings due to lack of atmosphere. Heavily cratered surface resembling Earth\'s Moon. Tidally locked in a 3:2 spin-orbit resonance.',
         'moons': [],
+        'total_moons': 0
     },
     'Venus': {
         'dist_au': 0.723,
@@ -214,6 +378,7 @@ PLANET_DATA = {
         'type': 'Terrestrial Planet',
         'description': 'Hottest planet due to runaway greenhouse effect. Dense CO2 atmosphere with sulfuric acid clouds. Rotates backwards (retrograde) and slower than its orbit.',
         'moons': [],
+        'total_moons': 0
     },
     'Earth': {
         'dist_au': 1.0,
@@ -227,6 +392,7 @@ PLANET_DATA = {
         'type': 'Terrestrial Planet',
         'description': 'Only known planet with liquid surface water and life. Protected by a magnetic field and ozone layer. One natural satellite.',
         'moons': ['Moon'],
+        'total_moons': 1
     },
     'Mars': {
         'dist_au': 1.524,
@@ -240,6 +406,7 @@ PLANET_DATA = {
         'type': 'Terrestrial Planet',
         'description': 'The Red Planet. Thin CO2 atmosphere. Home to Olympus Mons (tallest volcano) and Valles Marineris (largest canyon) in the solar system.',
         'moons': ['Phobos', 'Deimos'],
+        'total_moons': 2
     },
     'Jupiter': {
         'dist_au': 5.203,
@@ -252,7 +419,8 @@ PLANET_DATA = {
         'temperature': '-110°C (cloud tops)',
         'type': 'Gas Giant',
         'description': 'Largest planet. Mass is 2.5x all other planets combined. Great Red Spot is a storm larger than Earth lasting 350+ years. Strong magnetic field.',
-        'moons': ['Io', 'Europa', 'Ganymede', 'Callisto'],
+        'moons': ['Io', 'Europa', 'Ganymede', 'Callisto', 'Amalthea'],
+        'total_moons': 95
     },
     'Saturn': {
         'dist_au': 9.537,
@@ -265,7 +433,8 @@ PLANET_DATA = {
         'temperature': '-140°C (cloud tops)',
         'type': 'Gas Giant',
         'description': 'Known for its spectacular ring system made of ice and rock. Least dense planet — would float in water. 146 known moons.',
-        'moons': ['Enceladus', 'Tethys', 'Dione', 'Rhea', 'Titan', 'Iapetus'],
+        'moons': ['Mimas', 'Enceladus', 'Tethys', 'Dione', 'Rhea', 'Titan', 'Iapetus'],
+        'total_moons': 146
     },
     'Uranus': {
         'dist_au': 19.19,
@@ -279,6 +448,7 @@ PLANET_DATA = {
         'type': 'Ice Giant',
         'description': 'Rotates on its side (98° axial tilt), likely from an ancient collision. Blue-green color from methane in atmosphere. Faint ring system.',
         'moons': ['Miranda', 'Ariel', 'Umbriel', 'Titania', 'Oberon'],
+        'total_moons': 28
     },
     'Neptune': {
         'dist_au': 30.07,
@@ -291,7 +461,8 @@ PLANET_DATA = {
         'temperature': '-200°C (cloud tops)',
         'type': 'Ice Giant',
         'description': 'Windiest planet with speeds up to 2,100 km/h. Deep blue from methane absorption. Has the largest moon with a retrograde orbit (Triton).',
-        'moons': ['Proteus', 'Triton'],
+        'moons': ['Proteus', 'Triton', 'Nereid'],
+        'total_moons': 16
     },
     'Ceres': {
         'dist_au': 2.77,
@@ -305,6 +476,7 @@ PLANET_DATA = {
         'type': 'Dwarf Planet (Asteroid Belt)',
         'description': 'Largest object in the asteroid belt. Contains subsurface ocean of salty water. Bright spots are sodium carbonate deposits. Visited by Dawn spacecraft.',
         'moons': [],
+        'total_moons': 0
     },
     'Pluto': {
         'dist_au': 39.48,
@@ -317,7 +489,8 @@ PLANET_DATA = {
         'temperature': '-230°C (average)',
         'type': 'Dwarf Planet (Kuiper Belt)',
         'description': 'Reclassified from planet in 2006. Heart-shaped nitrogen ice plain (Sputnik Planitia). Binary system with Charon. Visited by New Horizons in 2015.',
-        'moons': ['Charon', 'Nix', 'Hydra'],
+        'moons': ['Charon', 'Nix', 'Hydra', 'Styx', 'Kerberos'],
+        'total_moons': 5
     },
     'Haumea': {
         'dist_au': 43.13,
@@ -331,6 +504,7 @@ PLANET_DATA = {
         'type': 'Dwarf Planet (Kuiper Belt)',
         'description': 'Fastest rotating large body in the solar system (3.9 hour day). Elongated egg shape from rapid spin. Has a faint ring system. Named after Hawaiian goddess of fertility.',
         'moons': ["Hi'iaka", 'Namaka'],
+        'total_moons': 2
     },
     'Makemake': {
         'dist_au': 45.79,
@@ -343,7 +517,8 @@ PLANET_DATA = {
         'temperature': '-243°C (estimated)',
         'type': 'Dwarf Planet (Kuiper Belt)',
         'description': 'Second brightest Kuiper Belt object after Pluto. Reddish-brown surface with frozen methane and ethane. Named after Rapa Nui creator god.',
-        'moons': [],
+        'moons': ['MK2'],
+        'total_moons': 1
     },
     'Eris': {
         'dist_au': 67.78,
@@ -357,6 +532,7 @@ PLANET_DATA = {
         'type': 'Dwarf Planet (Scattered Disc)',
         'description': 'Most massive known dwarf planet. Its discovery triggered Pluto\'s reclassification. Highly elliptical orbit ranging from 38 to 98 AU. Named after Greek goddess of discord.',
         'moons': ['Dysnomia'],
+        'total_moons': 1
     },
 }
 MOON_DATA = {
@@ -390,6 +566,16 @@ MOON_DATA = {
         'description': 'Smaller of Mars\'s moons. Smooth surface. Slowly drifting away from Mars.',
     },
     # ---- Jupiter (Galilean moons) ----
+    'Amalthea': {
+        'parent': 'Jupiter',
+        'dist_km': 181366,
+        'period_days': 0.50,
+        'radius_km': 84,
+        'mass_kg': 2.08e18,
+        'color': (180, 130, 100),
+        'description': 'Largest inner moon of Jupiter. Irregular potato shape.',
+    },
+
     'Io': {
         'parent': 'Jupiter',
         'dist_km': 421700,
@@ -427,6 +613,16 @@ MOON_DATA = {
         'description': 'Most heavily cratered body in the solar system. Ancient surface unchanged for 4 billion years. Possible subsurface ocean. Considered for a future human base.',
     },
     # ---- Saturn ----
+    'Mimas': {
+        'parent': 'Saturn',
+        'dist_km': 185539,
+        'period_days': 0.94,
+        'radius_km': 198,
+        'mass_kg': 3.75e19,
+        'color': (200, 200, 210),
+        'description': 'Resembles the Death Star. Smallest rounded body in the solar system.',
+    },
+
     'Enceladus': {
         'parent': 'Saturn',
         'dist_km': 237948,
@@ -546,6 +742,16 @@ MOON_DATA = {
         'color': (180, 200, 210),
         'description': 'Only large moon with a retrograde orbit — likely a captured Kuiper Belt object. Nitrogen geysers. Coldest measured surface in the solar system (-235°C).',
     },
+    'Nereid': {
+        'parent': 'Neptune',
+        'dist_km': 5513818,
+        'period_days': 360.13,
+        'radius_km': 170,
+        'mass_kg': 3.1e19,
+        'color': (170, 170, 180),
+        'description': 'Most eccentric orbit of any known moon.',
+    },
+
     # ---- Pluto ----
     'Charon': {
         'parent': 'Pluto',
@@ -574,6 +780,25 @@ MOON_DATA = {
         'color': (180, 180, 180),
         'description': 'Outermost known moon of Pluto. Irregular shape. Also tumbles chaotically like Nix. Discovered in 2005 by Hubble.',
     },
+    'Styx': {
+        'parent': 'Pluto',
+        'dist_km': 42656,
+        'period_days': 20.16,
+        'radius_km': 5,
+        'mass_kg': 7.5e15,
+        'color': (175, 175, 175),
+        'description': 'Smallest known moon of Pluto.',
+    },
+'Kerberos': {
+        'parent': 'Pluto',
+        'dist_km': 57783,
+        'period_days': 32.17,
+        'radius_km': 6,
+        'mass_kg': 1.65e16,
+        'color': (175, 175, 175),
+        'description': 'Small double-lobed moon of Pluto.',
+    },
+
     # ---- Eris ----
     'Dysnomia': {
         'parent': 'Eris',
@@ -603,41 +828,122 @@ MOON_DATA = {
         'color': (190, 190, 200),
         'description': 'Smaller inner moon of Haumea. Named after Hawaiian water spirit. Eccentric and inclined orbit.',
     },
+    # -----   Makemake-----
+    'MK2': {
+        'parent': 'Makemake',
+        'dist_km': 21100,
+        'period_days': 12.4,
+        'radius_km': 88,
+        'mass_kg': 4e18,
+        'color': (130, 100, 80),
+        'description': 'Discovered in 2015 by Hubble. Very dark surface.',
+    },
+
 }
-  
+
+real_data = {}
+try:
+    real_data = fetch_all_positions()
+except Exception as e:
+    print(f'JPL Horizons unavailable, using fallback positions: {e}')
+
+# --- Helper to apply real data if available ---
+def apply_real_data(planet, name):
+    key = name.lower()
+    if key in real_data:
+        d = real_data[key]
+        # Guard against None or non-numeric values from failed regex
+        if all(isinstance(d[k], (int, float)) for k in ['x', 'y', 'vx', 'vy']):
+            planet.x     = d['x']
+            planet.y     = d['y']
+            planet.x_vel = d['vx']
+            planet.y_vel = d['vy']
+        else:
+            print(f'WARNING: Bad data for {name}, using fallback')
+    return planet
+
+# --- Planet creation (unchanged from your current code) ---
 sun_body = Planet("Sun", YELLOW, 1.989e30, 0, 0, 30)
 sun_body.sun = True
 
-mercury = Planet("Mercury", BROWN, 3.301e23, 0.387 * Planet.AU, 0, 8, 47360 )
-venus    = Planet("Venus", GREEN, 4.867e24, 0.723 * Planet.AU, 0, 14, 35020)
-earth    = Planet("Earth", BLUE, 5.972e24, 1.0 * Planet.AU, 0, 16, 29780)
-mars     = Planet("Mars", RED, 6.417e23, 1.524 * Planet.AU, 0, 12, 24070)
-jupiter  = Planet("Jupiter", ORANGE, 1.899e27, 5.203 * Planet.AU, 0, 28, 13070)
-saturn   = Planet("Saturn", TAN, 5.685e26, 9.537 * Planet.AU, 0, 24, 9680)
-uranus   = Planet("Uranus", LIGHT_BLUE, 8.681e25, 19.19 * Planet.AU, 0, 18, 6800)
-neptune  = Planet("Neptune", DARK_BLUE, 1.024e26, 30.07 * Planet.AU, 0, 18, 5430)
+mercury  = apply_real_data(Planet("Mercury", BROWN,       3.301e23, 0.387  * Planet.AU, 0,  8, 47360), "Mercury")
+venus    = apply_real_data(Planet("Venus",   GREEN,       4.867e24, 0.723  * Planet.AU, 0, 14, 35020), "Venus")
+earth    = apply_real_data(Planet("Earth",   BLUE,        5.972e24, 1.0    * Planet.AU, 0, 16, 29780), "Earth")
+mars     = apply_real_data(Planet("Mars",    RED,         6.417e23, 1.524  * Planet.AU, 0, 12, 24070), "Mars")
+jupiter  = apply_real_data(Planet("Jupiter", ORANGE,      1.899e27, 5.203  * Planet.AU, 0, 28, 13070), "Jupiter")
+saturn   = apply_real_data(Planet("Saturn",  TAN,         5.685e26, 9.537  * Planet.AU, 0, 24,  9680), "Saturn")
+uranus   = apply_real_data(Planet("Uranus",  LIGHT_BLUE,  8.681e25, 19.19  * Planet.AU, 0, 18,  6800), "Uranus")
+neptune  = apply_real_data(Planet("Neptune", DARK_BLUE,   1.024e26, 30.07  * Planet.AU, 0, 18,  5430), "Neptune")
 
-ceres    = Planet("Ceres", (169, 169, 169), 9.39e20, 2.77 * Planet.AU, 0, 6, 17900)
-pluto    = Planet("Pluto", (210, 180, 140), 1.303e22, 29.66 * Planet.AU, 0, 8, 6100)
-haumea   = Planet("Haumea", (180, 160, 150), 4.006e21, 34.72 * Planet.AU, 0, 6, 5520)
-makemake = Planet("Makemake", (160, 120, 100), 3.1e21, 38.59 * Planet.AU, 0, 6, 5240)
-eris     = Planet("Eris", (200, 200, 210), 1.66e22, 37.91 * Planet.AU, 0, 8, 5580)
+ceres    = apply_real_data(Planet("Ceres",    (169,169,169),  9.39e20, 2.77  * Planet.AU, 0, 6, 17900), "Ceres")
+pluto    = apply_real_data(Planet("Pluto",    (210,180,140),  1.303e22, 29.66 * Planet.AU, 0, 8,  6100), "Pluto")
+haumea   = apply_real_data(Planet("Haumea",   (180,160,150),  4.006e21, 34.72 * Planet.AU, 0, 6,  5520), "Haumea")
+makemake = apply_real_data(Planet("Makemake", (160,120,100),  3.1e21,   38.59 * Planet.AU, 0, 6,  5240), "Makemake")
+eris     = apply_real_data(Planet("Eris",     (200,200,210),  1.66e22,  37.91 * Planet.AU, 0, 8,  5580), "Eris")
 
 planets = [
     sun_body,
     mercury, venus, earth, mars, jupiter, saturn, uranus, neptune,
-    ceres, pluto, haumea, makemake, eris,]
+    ceres, pluto, haumea, makemake, eris,
+]
 
+moons = {}
+ 
+for moon_name, data in MOON_DATA.items():
+    moon = Moon(moon_name, data['dist_km'], data['period_days'], data['radius_km'], data['color'])
+    parent_name = data['parent']
+    if parent_name not in moons:
+        moons[parent_name] = []
+    moons[parent_name].append(moon)
 
+asteroid_belt = Belt(2.2, 3.2, 2000, (100, 100, 100), "Asteroid Belt")
+kuiper_belt = Belt(30, 50, 3000, (70, 70, 90), "Kupier Belt")
+belts = [asteroid_belt, kuiper_belt]
+
+termination_shock = Boundary(85, (40, 80, 40), 'Termination Shock', dashed=True)
+heliopause = Boundary(120, (60, 60, 120), 'Heliopause', dashed=False)
+bow_shock = Boundary(180, (80, 40, 40), 'Bow Shock', dashed=True)
+boundaries = [termination_shock, heliopause, bow_shock]
+
+v1_dist = 165 * Planet.AU
+v1_angle = math.radians(260)
+v1_speed = 17000
+
+voyager1 = Probe('Voyager 1',
+    v1_dist * math.cos(v1_angle),
+    v1_dist * math.sin(v1_angle),
+    35 * Planet.AU,
+    -v1_speed * math.sin(v1_angle) * 0.9,
+    v1_speed * math.cos(v1_angle) * 0.9,
+    v1_speed * 0.2,
+    (0, 255, 150))
+
+v2_dist = 140 * Planet.AU
+v2_angle = math.radians(210)
+v2_speed = 15400
+
+voyager2 = Probe('Voyager 2',
+    v2_dist * math.cos(v2_angle),
+    v2_dist * math.sin(v2_angle),
+    -20 * Planet.AU,
+    -v2_speed * math.sin(v2_angle) * 0.9,
+    v2_speed * math.cos(v2_angle) * 0.9,
+    -v2_speed * 0.2,
+    (255, 150, 0))
+
+probes = [voyager1, voyager2]
+    
 running = True
 
 camera = Camera()
 
 font_name = pygame.font.SysFont("Arial", 13)
 font_hud_title = pygame.font.SysFont("Arial", 22, bold=True)
+moon_font = pygame.font.SysFont("Arial", 11)
 
 selected_planet = None
 
+detail_zoom = 1
 
 while running:
 
@@ -665,11 +971,17 @@ while running:
                 if selected_planet:
                     selected_planet.selected = False
                 selected_planet = None
-                system_paused = False     
+            elif event.key == pygame.K_EQUALS:
+                detail_zoom *= 1.5
+            elif event.key == pygame.K_MINUS:
+                detail_zoom /= 1.5
 
     screen.fill(BLACK)
     screen.set_clip((0,0, PANEL_SPLIT, HEIGHT))
     
+    for boundary in boundaries:
+        boundary.draw(screen, camera)
+
     for planet in planets:
         if planet == sun_body:
             continue
@@ -714,13 +1026,26 @@ while running:
         planet.x += planet.x_vel * planet.TIMESTEP
         planet.y += planet.y_vel * planet.TIMESTEP
     
+    for probe in probes:
+        probe.update(Planet.TIMESTEP)
+        
+    for belt in belts:
+        belt.update(Planet.TIMESTEP)
+    
+    for belt in belts:
+        belt.draw(screen, camera)
+        
+    for probe in probes:
+        probe.draw(screen, camera)
+    
     for planet in planets:
         planet.draw(screen, camera)
-
+        
     screen.set_clip(None)
     
     pygame.draw.line(screen, (60,60,60), (PANEL_SPLIT,0), (PANEL_SPLIT, HEIGHT), 1)
     
+
 
     if selected_planet:
         info = PLANET_DATA[selected_planet.name]
@@ -751,7 +1076,7 @@ while running:
             ('Radius', format_radius(info['radius_km'])),
             ('Surface Gravity', format_gravity(info['surface_gravity_m_s2'])),
             ('Temperature', format_temp(info['temperature'])),
-            ('Moons', str(len(info['moons']))),
+            ('Moons (shown)', f"{len(info['moons'])} of {info['total_moons']}"),
         ]
         
         for label, value in rows:
@@ -784,7 +1109,27 @@ while running:
             text = font_name.render(line, True, (180, 180, 180))
             screen.blit(text, (hud_x, y))
             y += 18
-    
+        
+        planet_moons = moons.get(selected_planet.name, [])
+ 
+        if planet_moons:
+            center_x = PANEL_SPLIT + DETAIL_WIDTH / 2
+            center_y = 700
+            available_radius = min(180, HEIGHT - center_y - 20)
+            
+            max_dist = max(mn.dist_km for mn in planet_moons)
+            orbit_scale = (available_radius / max_dist) * detail_zoom
+            
+            pygame.draw.circle(screen, selected_planet.color,
+                (int(center_x), int(center_y)), 12)
+            
+            for mn in planet_moons:
+                mn.update(0.005)
+                # Only draw if orbit fits on screen
+                orbit_r = mn.dist_km * orbit_scale
+                if orbit_r < available_radius + 50:
+                    mn.draw(screen, center_x, center_y, orbit_scale)
+
     pygame.display.update()
 
     clock.tick(60)
