@@ -48,7 +48,7 @@ class Planet:
         self.sun = False
         self.hovered =False
         self.selected = False
-    
+            
     def draw(self, surface, camera):
 
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
@@ -67,7 +67,7 @@ class Planet:
             
         if self.selected:
             pygame.draw.circle(surface, (255, 255, 255), (int(screen_x), int(screen_y)), dot_radius + 4, 1)
-            
+                
         pygame.draw.circle(surface, draw_color, (int(screen_x), int(screen_y)), dot_radius)
         
         label = font_name.render(self.name, True, (200,200,200))
@@ -904,7 +904,9 @@ belts = [asteroid_belt, kuiper_belt]
 termination_shock = Boundary(85, (40, 80, 40), 'Termination Shock', dashed=True)
 heliopause = Boundary(120, (60, 60, 120), 'Heliopause', dashed=False)
 bow_shock = Boundary(180, (80, 40, 40), 'Bow Shock', dashed=True)
-boundaries = [termination_shock, heliopause, bow_shock]
+oort_inner = Boundary(2000, (80, 60, 80), 'Inner Oort Cloud', dashed=True)
+oort_outer = Boundary(50000, (60, 40, 60), 'Outer Oort Cloud', dashed=True)
+boundaries = [termination_shock, heliopause, bow_shock, oort_inner, oort_outer]
 
 v1_dist = 165 * Planet.AU
 v1_angle = math.radians(260)
@@ -946,6 +948,10 @@ selected_planet = None
 
 detail_zoom = 1
 
+paused = True
+
+
+
 while running:
 
     for event in pygame.event.get():
@@ -966,6 +972,7 @@ while running:
                     if planet.hit_test(mouse_x, mouse_y, camera):
                         select_planet(planet)
                         break
+        
                     
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_0:
@@ -976,6 +983,8 @@ while running:
                 detail_zoom *= 1.5
             elif event.key == pygame.K_MINUS:
                 detail_zoom /= 1.5
+            elif event.key == pygame.K_SPACE:
+                paused = not paused
 
     screen.fill(BLACK)
     screen.set_clip((0,0, PANEL_SPLIT, HEIGHT))
@@ -990,48 +999,50 @@ while running:
         if PLANET_DATA[planet.name]['eccentricity'] > 0.1:
             continue
         
-        orbit_radius = PLANET_DATA[planet.name]['dist_au'] * Planet.AU * camera.base_scale * camera.zoom
-        
+        actual_dist = math.sqrt(planet.x**2 + planet.y**2)
+        orbit_radius = actual_dist * camera.base_scale * camera.zoom
+
         if orbit_radius > 2:
             sun_sx, sun_sy = camera.world_to_screen(0, 0)
             pygame.draw.circle(screen, (30, 30, 30), (sun_sx, sun_sy), int(orbit_radius), 1)
+            
+    if not paused:
+                
+        forces = {}
         
-    
-    forces = {}
-    
-    for planet in planets:        
-        if planet == sun_body:
-            continue
-        
-        total_fx = 0
-        total_fy = 0
-        
-        for other_planet in planets:
-            if planet == other_planet:
+        for planet in planets:        
+            if planet == sun_body:
                 continue
-            (fx, fy) = planet.attraction(other_planet)
-            total_fx += fx
-            total_fy += fy
+            
+            total_fx = 0
+            total_fy = 0
+            
+            for other_planet in planets:
+                if planet == other_planet:
+                    continue
+                (fx, fy) = planet.attraction(other_planet)
+                total_fx += fx
+                total_fy += fy
+            
+            forces[planet.name] = (total_fx, total_fy)
         
-        forces[planet.name] = (total_fx, total_fy)
-    
-    for planet in planets:
-        if planet == sun_body:
-            continue
+        for planet in planets:
+            if planet == sun_body:
+                continue
+            
+            (fx, fy) = forces[planet.name]
+            
+            planet.x_vel += (fx / planet.mass) * planet.TIMESTEP
+            planet.y_vel += (fy / planet.mass) * planet.TIMESTEP 
+            
+            planet.x += planet.x_vel * planet.TIMESTEP
+            planet.y += planet.y_vel * planet.TIMESTEP
         
-        (fx, fy) = forces[planet.name]
-        
-        planet.x_vel += (fx / planet.mass) * planet.TIMESTEP
-        planet.y_vel += (fy / planet.mass) * planet.TIMESTEP 
-        
-        planet.x += planet.x_vel * planet.TIMESTEP
-        planet.y += planet.y_vel * planet.TIMESTEP
-    
-    for probe in probes:
-        probe.update(Planet.TIMESTEP)
-        
-    for belt in belts:
-        belt.update(Planet.TIMESTEP)
+        for probe in probes:
+            probe.update(Planet.TIMESTEP)
+            
+        for belt in belts:
+            belt.update(Planet.TIMESTEP)
     
     for belt in belts:
         belt.draw(screen, camera)
@@ -1130,7 +1141,11 @@ while running:
                 orbit_r = mn.dist_km * orbit_scale
                 if orbit_r < available_radius + 50:
                     mn.draw(screen, center_x, center_y, orbit_scale)
-
+    
+    if paused:
+        pause_text = font_hud_title.render("PAUSED (Space to resume)", True, (180, 180, 180))
+        screen.blit(pause_text, (10, HEIGHT - 35))
+    
     pygame.display.update()
 
     clock.tick(60)
