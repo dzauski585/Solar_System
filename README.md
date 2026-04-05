@@ -27,7 +27,7 @@ A real-time interactive solar system simulator built with Pygame. Planets use li
 | Detail panel | ![Detail panel](screenshots/detail_panel.png) |
 | Full zoom out (belts + boundaries) | ![Full view](screenshots/full_view.png) |
 
-**Demo video:** [solar_system_demo.mp4](video/solar_system_demo.mp4)
+**Demo video:** [solar_system_demo.mp4](video/git_demo.mp4)
 
 ## Controls
 
