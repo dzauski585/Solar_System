@@ -1,6 +1,7 @@
 # The Solar System
 
-![Solar System Overview](screenshots/overview.png)
+![Demo](screenshots/demo.gif)
+
 
 A real-time interactive solar system simulator built with Pygame. Planets use live ephemeris data from JPL Horizons when available, with Newtonian gravity driving orbital mechanics. Includes dwarf planets, asteroid and Kuiper belts, heliosphere boundaries, Voyager probes, and a detailed info panel with moon visualizations.
 
@@ -72,25 +73,4 @@ The program will attempt to fetch live positions from JPL Horizons on startup. I
     └── solar_system_demo.mp4
 ```
 
----
 
-## Capturing Screenshots & Video
-
-### Screenshots
-
-#### 1. `overview.png` — Hero shot
-
-
-#### 2. `inner_planets.png` — Inner solar system detail
-
-
-#### 3. `outer_planets.png` — Outer solar system
-
-
-#### 4. `detail_panel.png` — Detail panel close-up
-
-
-#### 5. `full_view.png` — Maximum zoom out
-
-
-### Video
